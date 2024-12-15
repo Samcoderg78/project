@@ -56,6 +56,23 @@ def analyze_dataset(df: pd.DataFrame) -> dict:
         "summary_stats": df.describe(include="all").to_dict()
     }
 
+# Function to dynamically generate a story prompt
+def generate_story_prompt(summary: dict) -> str:
+    columns = ", ".join(summary["columns"])
+    missing_values = summary["missing_values"]
+    missing_info = ", ".join([f"{col}: {count} missing" for col, count in missing_values.items() if count > 0])
+    stats = summary["summary_stats"]
+
+    prompt = (
+        "Here is a dataset summary:\n\n"
+        f"Columns: {columns}\n\n"
+        f"Missing Values: {missing_info or 'None'}\n\n"
+        f"Summary Statistics: {stats}\n\n"
+        "Based on this information, provide a concise story or summary highlighting key insights, "
+        "interesting observations, and possible recommendations for further analysis."
+    )
+    return prompt
+
 # Function to visualize data
 def visualize_data(df: pd.DataFrame, output_folder: str) -> list:
     chart_paths = []
@@ -97,17 +114,17 @@ def generate_narration(prompt: str, retries=3, delay=5) -> str:
     logging.error("Max retries reached. Exiting.")
     sys.exit(1)
 
-# Create output folder if it does not exist
+# Create output folder in the current working directory
 def create_output_folder(file_path: str) -> str:
-    folder_name = os.path.splitext(os.path.basename(file_path))[0]  # Get filename without extension
-    output_folder = os.path.join(os.path.dirname(file_path), folder_name)  # Create path for the folder
+    folder_name = os.path.splitext(os.path.basename(file_path))[0]  # Use the file's name for the folder
+    output_folder = os.path.join(os.getcwd(), folder_name)  # Save in the current working directory
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     return output_folder
 
 # Main function
 def main(file_path: str):
-    output_folder = create_output_folder(file_path)  # Automatically create a folder with the filename
+    output_folder = create_output_folder(file_path)  # Automatically create a folder in the current working directory
     df = load_dataset(file_path)
 
     if df is None or df.empty:
@@ -115,10 +132,13 @@ def main(file_path: str):
         sys.exit(1)
 
     summary = analyze_dataset(df)
-    story = generate_narration("Provide a summary of the dataset based on the columns, missing values, and summary statistics.")
-    
+
+    # Generate a dynamic story prompt
+    story_prompt = generate_story_prompt(summary)
+    story = generate_narration(story_prompt)
+
     chart_paths = visualize_data(df, output_folder)
-    
+
     readme_path = os.path.join(output_folder, "README.md")
     with open(readme_path, "w") as f:
         f.write(f"# Automated Analysis Report\n\n")
@@ -137,3 +157,4 @@ def main(file_path: str):
 if __name__ == "__main__":
     file_path = sys.argv[1]  # Get the file path from the command-line argument
     main(file_path)
+
